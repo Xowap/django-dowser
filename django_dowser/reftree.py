@@ -5,9 +5,11 @@ from types import FrameType
 
 log = logging.getLogger(__name__)
 
-class Tree(object):
 
+class Tree(object):
     def __init__(self, obj):
+        self.seen = {}
+        self.maxdepth = None
         self.obj = obj
         self.filename = sys._getframe().f_code.co_filename
         self._ignore = {}
@@ -31,7 +33,6 @@ class Tree(object):
 
         # Ignore the calling frame, its builtins, globals and locals
         self.ignore_caller()
-
         self.maxdepth = maxdepth
         count = 0
         log.debug("will iterate results")
@@ -57,12 +58,15 @@ repr_set = _repr_container
 repr_list = _repr_container
 repr_tuple = _repr_container
 
+
 def repr_str(obj):
     return "%s of len %s: %r" % (type(obj).__name__, len(obj), obj)
 repr_unicode = repr_str
 
+
 def repr_frame(obj):
     return "frame from %s line %s" % (obj.f_code.co_filename, obj.f_lineno)
+
 
 def get_repr(obj, limit=250):
     typename = getattr(type(obj), "__name__", None)
@@ -80,7 +84,6 @@ def get_repr(obj, limit=250):
 
 
 class ReferentTree(Tree):
-
     def _gen(self, obj, depth=0):
         if self.maxdepth and depth >= self.maxdepth:
             yield depth, 0, "---- Max depth reached ----"
@@ -101,7 +104,6 @@ class ReferentTree(Tree):
 
 
 class ReferrerTree(Tree):
-
     def _gen(self, obj, depth=0):
         if self.maxdepth and depth >= self.maxdepth:
             yield depth, 0, "---- Max depth reached ----"
@@ -129,9 +131,7 @@ class ReferrerTree(Tree):
                 yield parent
 
 
-
 class CircularReferents(Tree):
-
     def walk(self, maxresults=100, maxdepth=None):
         """Walk the object tree, showing circular referents."""
         self.stops = 0
@@ -168,9 +168,9 @@ class CircularReferents(Tree):
 
             refrepr = get_repr(ref)
             if id(ref) == id(self.obj):
-                yield trail + [refrepr,]
+                yield trail + [refrepr]
 
-            for child in self._gen(ref, depth + 1, trail + [refrepr,]):
+            for child in self._gen(ref, depth + 1, trail + [refrepr]):
                 yield child
 
     def print_tree(self, maxresults=100, maxdepth=None):
@@ -190,4 +190,3 @@ def count_objects():
     d = [(v, k) for k, v in d.iteritems()]
     d.sort()
     return d
-

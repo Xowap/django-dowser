@@ -11,9 +11,10 @@ import threading
 from . import dowser, DOWSER_NAMES
 from . import reftree
 
+
 @user_passes_test(lambda u: u.is_superuser)
 def index(request):
-    floor = request.GET.get('floor', 0)
+    floor = int(request.GET.get('floor', default=0))
     rows = []
     typenames = dowser.history.keys()
     typenames = sorted(typenames)
@@ -21,17 +22,15 @@ def index(request):
         history = dowser.history[typename]
         maxhist = 0
         for hist in history:
-            maxhist = max(maxhist,max(hist))
-        charts = " ".join(map(lambda x: '<img class="chart" src="%s" alt="%s"/>' % (chart_url2(history[x]),DOWSER_NAMES[x]),range(len(history))))
-        if maxhist > int(floor):
+            maxhist = max(maxhist, max(hist))
+        charts = " ".join(map(lambda x: '<img class="chart" src="%s" alt="%s"/>' %
+                                        (chart_url2(history[x]), DOWSER_NAMES[x]), range(len(history))))
+        if maxhist > floor:
             row = ('<div class="typecount">%s<br />'
-#                   '<img class="chart" src="%s" /><br />'
-                    '%s<br />'
+                   '%s<br />'
                    'Cur: %s Max: %s <a href="%s">TRACE</a></div>'
                    % (escape(typename),
                       charts,
-#                      chart_url(typename),
-#                      "chart/%s" % typename,
                       history[0][0], maxhist,
                       "trace/%s" % typename,
                       )
@@ -43,18 +42,21 @@ def index(request):
 
     return render_to_response('django_dowser/graphs.html', ctx)
 
+
 def chart_url2(entries):
-    url = "http://chart.apis.google.com/chart?chs=%sx20&cht=ls&chco=0077CC&chd=t:%s" % (len(entries),",".join(map(lambda x:str(x),reversed(entries))))
+    url = "http://chart.apis.google.com/chart?chs=%sx20&cht=ls&chco=0077CC&chd=t:%s" % \
+          (len(entries), ",".join(map(lambda x: str(x), reversed(entries))))
     return url
 
-def chart_url(typename,history_slot=0):
-    data = reversed(list(dowser.history[typename][history_slot])) #TODO
+
+def chart_url(typename, history_slot=0):
+    data = reversed(list(dowser.history[typename][history_slot]))  # TODO
     url = chart_url2(data)
     return url
 
 
 @user_passes_test(lambda u: u.is_superuser)
-def trace(request,typename,objid=None):
+def trace(request, typename, objid=None):
     gc.collect()
 
     if objid is None:
@@ -71,10 +73,9 @@ def trace(request,typename,objid=None):
 
     return render_to_response("django_dowser/trace.html", ctx)
 
+
 @user_passes_test(lambda u: u.is_superuser)
-def tree(request,objid,typename):
-#    typename = req.path_info_pop()
-#    objid = req.path_info_pop()
+def tree(request, objid, typename):
     gc.collect()
 
     rows = []
@@ -89,9 +90,9 @@ def tree(request,objid,typename):
             else:
                 rows.append('<div class="obj">')
 
-                tree = ReferrerTree(obj)
-                tree.ignore(all_objs)
-                for depth, parentid, parentrepr in tree.walk(maxresults=1000):
+                my_tree = ReferrerTree(obj)
+                my_tree.ignore(all_objs)
+                for depth, parentid, parentrepr in my_tree.walk(maxresults=1000):
                     rows.append(parentrepr)
 
                 rows.append('</div>')
@@ -108,11 +109,13 @@ def tree(request,objid,typename):
 
     return render_to_response('django_dowser/tree.html', ctx)
 
+
 method_types = [type(tuple.__le__),                 # 'wrapper_descriptor'
                 type([1].__le__),                   # 'method-wrapper'
                 type(sys.getcheckinterval),         # 'builtin_function_or_method'
                 type(threading.Thread.isAlive),     # 'instancemethod'
                 ]
+
 
 def trace_all(typename):
     rows = []
@@ -124,6 +127,7 @@ def trace_all(typename):
     if not rows:
         rows = ["<h3>The type you requested was not found.</h3>"]
     return rows
+
 
 def trace_one(typename, objid):
     rows = []
@@ -177,7 +181,6 @@ def get_repr(obj, limit=250):
     return escape(reftree.get_repr(obj, limit))
 
 
-
 class ReferrerTree(reftree.Tree):
 
     ignore_modules = True
@@ -195,8 +198,7 @@ class ReferrerTree(reftree.Tree):
         thisfile = sys._getframe().f_code.co_filename
         for ref in refiter:
             # Exclude all frames that are from this module or reftree.
-            if (isinstance(ref, FrameType)
-                and ref.f_code.co_filename in (thisfile, self.filename)):
+            if isinstance(ref, FrameType) and ref.f_code.co_filename in (thisfile, self.filename):
                 continue
 
             # Exclude all functions and classes from this module or reftree.
