@@ -21,7 +21,7 @@ class Dowser(object):
     """
     history = {}
     samples = []
-    
+
     def __init__(self):
         #TODO: how to limit it only to server process not the monitor
         #TODO: cover multi-process configuration - maybe as separate daemon...
@@ -29,17 +29,17 @@ class Dowser(object):
         self.runthread = threading.Thread(target=self.start)
         self.runthread.daemon = True
         self.runthread.start()
-    
+
 
     def start(self):
         self.running = True
         while self.running:
             self.tick()
             time.sleep(DOWSER_TICKS[0])
-    
+
     def tick(self):
         gc.collect()
-        
+
         typecounts = {}
 
         for obj in gc.get_objects():
@@ -49,16 +49,16 @@ class Dowser(object):
                 typecounts[typename] += 1
             else:
                 typecounts[typename] = 1
-        
-        for typename, count in typecounts.iteritems():
+
+        for typename, count in typecounts.items():
 #            typename = objtype.__module__ + "." + objtype.__name__
             if typename not in self.history:
-                self.history[typename] = map(lambda x: deque([0] * x), DOWSER_MAXENTRIES)
+                self.history[typename] = list(map(lambda x: deque([0] * x), DOWSER_MAXENTRIES))
             self.history[typename][0].appendleft(count)
-                
+
         self.samples[0] = self.samples[0] + 1
         promote = [False] * (len(DOWSER_MAXENTRIES)-1)
-        
+
         #let's calculate what we promote
         for i in range(len(self.samples)-1):
             if self.samples[i] >= DOWSER_TICKS[i]:
@@ -66,9 +66,9 @@ class Dowser(object):
                 self.samples[i+1] = self.samples[i+1] + 1
                 self.samples[i] = 0
 
-        for typename, hist in self.history.iteritems():
+        for typename, hist in self.history.items():
             history = self.history[typename]
-            #let's promote max from (set of entries to lower granulity history) 
+            #let's promote max from (set of entries to lower granulity history)
             for i in range(len(self.samples)-1):
                 if promote[i]:
                     history[i+1].appendleft(max(itertools.islice(history[i],0,DOWSER_TICKS[i])))

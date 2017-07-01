@@ -13,10 +13,10 @@ from . import reftree
 
 @user_passes_test(lambda u: u.is_superuser)
 def index(request):
-    floor = request.REQUEST.get('floor', 0)
+    floor = request.GET.get('floor', 0)
     rows = []
     typenames = dowser.history.keys()
-    typenames.sort()
+    typenames = sorted(typenames)
     for typename in typenames:
         history = dowser.history[typename]
         maxhist = 0
@@ -37,13 +37,16 @@ def index(request):
                       )
                    )
             rows.append(row)
-    return render_to_response("django_dowser/graphs.html",{'output':"\n".join(rows)},
-                              context_instance=RequestContext(request))
+
+    ctx = RequestContext(request)
+    ctx['output'] = '\n'.join(rows)
+
+    return render_to_response('django_dowser/graphs.html', ctx)
 
 def chart_url2(entries):
     url = "http://chart.apis.google.com/chart?chs=%sx20&cht=ls&chco=0077CC&chd=t:%s" % (len(entries),",".join(map(lambda x:str(x),reversed(entries))))
     return url
-    
+
 def chart_url(typename,history_slot=0):
     data = reversed(list(dowser.history[typename][history_slot])) #TODO
     url = chart_url2(data)
@@ -52,25 +55,28 @@ def chart_url(typename,history_slot=0):
 
 @user_passes_test(lambda u: u.is_superuser)
 def trace(request,typename,objid=None):
-#    typename = req.path_info_pop()
-#    objid = req.path_info_pop()
     gc.collect()
-    
+
     if objid is None:
         rows = trace_all(typename)
     else:
         rows = trace_one(typename, objid)
-    
-    return render_to_response("django_dowser/trace.html", 
-                              {'output':"\n".join(rows),'typename':typename,'objid':objid or ""},
-                              context_instance=RequestContext(request))
+
+    ctx = RequestContext(request)
+    ctx.update({
+        'output': '\n'.join(rows),
+        'typename': typename,
+        'objid': objid or '',
+    })
+
+    return render_to_response("django_dowser/trace.html", ctx)
 
 @user_passes_test(lambda u: u.is_superuser)
 def tree(request,objid,typename):
 #    typename = req.path_info_pop()
 #    objid = req.path_info_pop()
     gc.collect()
-    
+
     rows = []
     objid = int(objid)
     all_objs = gc.get_objects()
@@ -82,20 +88,25 @@ def tree(request,objid,typename):
                         "of the correct type.</h3>"]
             else:
                 rows.append('<div class="obj">')
-                
+
                 tree = ReferrerTree(obj)
                 tree.ignore(all_objs)
                 for depth, parentid, parentrepr in tree.walk(maxresults=1000):
                     rows.append(parentrepr)
-                
+
                 rows.append('</div>')
             break
     if not rows:
         rows = ["<h3>The object you requested was not found.</h3>"]
-    
-    return render_to_response("django_dowser/tree.html", 
-                              {'output':"\n".join(rows),'typename':typename,'objid':objid},
-                              context_instance=RequestContext(request))
+
+    ctx = RequestContext(request)
+    ctx.update({
+        'output': '\n'.join(rows),
+        'typename': typename,
+        'objid': objid,
+    })
+
+    return render_to_response('django_dowser/tree.html', ctx)
 
 method_types = [type(tuple.__le__),                 # 'wrapper_descriptor'
                 type([1].__le__),                   # 'method-wrapper'
@@ -139,7 +150,7 @@ def trace_one(typename, objid):
                                     (k, get_repr(v)))
                     del v
                 rows.append('</div>')
-                
+
                 # Referrers
                 rows.append('<div class="refs"><h3>Referrers (Parents)</h3>')
                 rows.append('<p class="desc"><a href="%s">Show the '
@@ -150,7 +161,7 @@ def trace_one(typename, objid):
                     if parentid:
                         rows.append("<p class='obj'>%s</p>" % parentrepr)
                 rows.append('</div>')
-                
+
                 # Referents
                 rows.append('<div class="refs"><h3>Referents (Children)</h3>')
                 for child in gc.get_referents(obj):
@@ -168,16 +179,16 @@ def get_repr(obj, limit=250):
 
 
 class ReferrerTree(reftree.Tree):
-    
+
     ignore_modules = True
-    
+
     def _gen(self, obj, depth=0):
         if self.maxdepth and depth >= self.maxdepth:
             yield depth, 0, "---- Max depth reached ----"
             raise StopIteration
         if isinstance(obj, ModuleType) and self.ignore_modules:
             raise StopIteration
-        
+
         refs = gc.get_referrers(obj)
         refiter = iter(refs)
         self.ignore(refs, refiter)
@@ -187,16 +198,16 @@ class ReferrerTree(reftree.Tree):
             if (isinstance(ref, FrameType)
                 and ref.f_code.co_filename in (thisfile, self.filename)):
                 continue
-            
+
             # Exclude all functions and classes from this module or reftree.
             mod = getattr(ref, "__module__", "")
             if "django_dowser" in mod or "reftree" in mod or mod == '__main__':
                 continue
-            
+
             # Exclude all parents in our ignore list.
             if id(ref) in self._ignore:
                 continue
-            
+
             # Yield the (depth, id, repr) of our object.
             yield depth, 0, '%s<div class="branch">' % (" " * depth)
             if id(ref) in self.seen:
@@ -204,21 +215,21 @@ class ReferrerTree(reftree.Tree):
             else:
                 self.seen[id(ref)] = None
                 yield depth, id(ref), self.get_repr(ref, obj)
-                
+
                 for parent in self._gen(ref, depth + 1):
                     yield parent
             yield depth, 0, '%s</div>' % (" " * depth)
-    
+
     def get_repr(self, obj, referent=None):
         """Return an HTML tree block describing the given object."""
         objtype = type(obj)
         typename = str(objtype.__module__) + "." + objtype.__name__
         prettytype = typename.replace("__builtin__.", "")
-        
+
         name = getattr(obj, "__name__", "")
         if name:
             prettytype = "%s %r" % (prettytype, name)
-        
+
         key = ""
         if referent:
             key = self.get_refkey(obj, referent)
@@ -231,14 +242,14 @@ class ReferrerTree(reftree.Tree):
                 '<span class="repr">%s</span>'
                 % (url, id(obj), prettytype, key, get_repr(obj, 100))
                 )
-    
+
     def get_refkey(self, obj, referent):
         """Return the dict key or attribute name of obj which refers to referent."""
         if isinstance(obj, dict):
-            for k, v in obj.iteritems():
+            for k, v in obj.items():
                 if v is referent:
                     return " (via its %r key)" % k
-        
+
         for k in dir(obj) + ['__dict__']:
             if getattr(obj, k, None) is referent:
                 return " (via its %r attribute)" % k
